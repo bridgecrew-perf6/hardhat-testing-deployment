@@ -1,31 +1,70 @@
 const { expect } = require("chai")
+describe("Token Contract", function () {
+  let Token
+  let hardhatToken
+  let owner
+  let address1
+  let address2
+  let restAddress
 
-describe("Token contract", function () {
-  it("Deployment should assing the total supply of tokens to the owner", async function () {
-    const [owner] = await ethers.getSigners()
-    const Token = await ethers.getContractFactory("Token") // instance of contract
-
-    const hardhatToken = await Token.deploy() // deployment of contract
-    const ownerBalance = await hardhatToken.balanceOfAcc(owner.address) // owner balance specified in contract - returned by balanceOfAcc method of contract
-    console.log({ ownerBalance })
-
-    expect(await hardhatToken.totalSupply()).to.equal(ownerBalance) // check if total supply (10,000) is equals to the owner balance
+  beforeEach(async function () {
+    Token = await ethers.getContractFactory("Token")
+    ;[owner, address1, address2, ...restAddress] = await ethers.getSigners()
+    hardhatToken = await Token.deploy()
   })
-  // Transfer Function
-  it("Should transfer tokens between account", async function () {
-    const [owner, address1, address2] = await ethers.getSigners()
-    const Token = await ethers.getContractFactory("Token") // instance of contract
+  //
+  describe("Deployment", function () {
+    it("Should set the right owner", async function () {
+      expect(await hardhatToken.owner()).to.equal(owner.address)
+    })
 
-    const hardhatToken = await Token.deploy() // deployment of contract
+    it("Should assing the total supply of token to the owner", async function () {
+      const ownerBalance = await hardhatToken.balanceOfAcc(owner.address)
+      expect(await hardhatToken.totalSupply()).to.equal(ownerBalance)
+    })
+  })
 
-    //   transfer 10 tokens from owner to address1 - it by default take owner's account for transaction
-    await hardhatToken.transfer(address1.address, 10)
-    expect(await hardhatToken.balanceOfAcc(address1.address)).to.equal(10)
+  // Transactions
+  describe("Transactions", function () {
+    it("Should transfer tokens between account", async function () {
+      // transfer 10 tokens to address1
+      await hardhatToken.transfer(address1.address, 10)
+      expect(await hardhatToken.balanceOfAcc(address1.address)).to.equal(10)
+      expect(await hardhatToken.balanceOfAcc(owner.address)).to.equal(
+        (await hardhatToken.totalSupply()) - 10
+      )
 
-    // transfer 5 tokens from address1 to address2 - we need to connect both account to initiate transaction
-    await hardhatToken.connect(address1).transfer(address2.address, 5)
+      // transfer 5 token to address2 - first we need to connect both accounts
+      await hardhatToken.connect(address1).transfer(address2.address, 5)
+      expect(await hardhatToken.balanceOfAcc(address2.address)).to.equal(5)
+      expect(await hardhatToken.balanceOfAcc(address1.address)).to.equal(5)
+    })
+    // check balance if token trying to send is less than balance
+    // it("Should fail if sender does not have enough tokens", async function () {
+    //   const initialOwnerBalance = await hardhatToken.balanceOfAcc(owner.address)
+    //   expect(
+    //     await hardhatToken.connect(address1).transfer(owner.address, 1)
+    //   ).to.be.revertedWith("Not enough tokens")
+    //   expect(await hardhatToken.balanceOfAcc(owner.address)).to.equal(
+    //     initialOwnerBalance
+    //   )
+    // })
+    it("Should update balance after transaction", async function () {
+      let initialOwnerBalance = await hardhatToken.balanceOfAcc(owner.address)
 
-    expect(await hardhatToken.balanceOfAcc(address2.address)).to.equal(5)
-    expect(await hardhatToken.balanceOfAcc(address1.address)).to.equal(5)
+      await hardhatToken.transfer(address1.address, 10)
+      const address1Balance = await hardhatToken.balanceOfAcc(address1.address)
+      expect(address1Balance).to.equal(10)
+      expect(await hardhatToken.balanceOfAcc(owner.address)).to.equal(
+        initialOwnerBalance - address1Balance
+      )
+
+      await hardhatToken.transfer(address2.address, 10)
+      const address2Balance = await hardhatToken.balanceOfAcc(address2.address)
+      expect(address2Balance).to.equal(10)
+      expect(await hardhatToken.balanceOfAcc(owner.address)).to.equal(
+        initialOwnerBalance - 20
+      )
+    })
   })
 })
